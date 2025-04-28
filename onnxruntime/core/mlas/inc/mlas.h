@@ -57,6 +57,9 @@ Abstract:
 #if defined(MLAS_TARGET_ARM64) || defined(MLAS_TARGET_ARM64EC) || defined(MLAS_TARGET_ARM)
 #define MLAS_TARGET_ARM_ANY
 #endif
+#if defined(__riscv) && __riscv_xlen==64
+#define MLAS_TARGET_RISCV64
+#endif
 
 #if defined(__VSX__)
 #define MLAS_TARGET_POWER

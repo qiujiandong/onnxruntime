@@ -21,6 +21,22 @@ set(CMAKE_INCLUDE_PATH "${RISCV_TOOLCHAIN_ROOT}/sysroot/usr/include/")
 set(CMAKE_LIBRARY_PATH "${RISCV_TOOLCHAIN_ROOT}/sysroot/usr/lib/")
 set(CMAKE_PROGRAM_PATH "${RISCV_TOOLCHAIN_ROOT}/sysroot/usr/bin/")
 
+set(onnxruntime_RISCV_VPU "none" CACHE STRING "Select RISC-V VPU mode (none, vlen128, vlen256)")
+set_property(CACHE onnxruntime_RISCV_VPU PROPERTY STRINGS "none" "vlen128" "vlen256")
+
+message(STATUS "onnxruntime_RISCV_VPU = ${onnxruntime_RISCV_VPU}")
+
+if(onnxruntime_RISCV_VPU STREQUAL "vlen128")
+  add_compile_options(-march=rv64gcv_zvl128b -mabi=lp64d -mrvv-vector-bits=zvl)
+  add_link_options(-march=rv64gcv_zvl128b -mabi=lp64d -mrvv-vector-bits=zvl)
+elseif(onnxruntime_RISCV_VPU STREQUAL "vlen256")
+  add_compile_options(-march=rv64gcv_zvl256b -mabi=lp64d -mrvv-vector-bits=zvl)
+  add_link_options(-march=rv64gcv_zvl256b -mabi=lp64d -mrvv-vector-bits=zvl)
+else()
+  add_compile_options(-march=rv64gc -mabi=lp64d)
+  add_link_options(-march=rv64gc -mabi=lp64d)
+endif()
+
 if(RISCV_QEMU_PATH)
   message(STATUS "RISCV_QEMU_PATH=${RISCV_QEMU_PATH} is defined during compilation.")
   set(CMAKE_CROSSCOMPILING_EMULATOR "${RISCV_QEMU_PATH};-L;${CMAKE_SYSROOT}")
