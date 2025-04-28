@@ -19,6 +19,7 @@ Abstract:
 
 #include <algorithm>
 #include <atomic>
+#include <cfloat>
 #include <cmath>
 #include <functional>
 #include <limits>
@@ -46,6 +47,8 @@ Abstract:
 #endif
 #include <windows.h>
 #include <intrin.h>
+#elif defined(__riscv_vector)
+#include <riscv_vector.h>
 #else
 #if defined(__arm__) || defined(__aarch64__)
 #include <arm_neon.h>
@@ -1466,6 +1469,9 @@ MlasConvDepthwiseFloat_CHW(
 #elif defined(MLAS_TARGET_LARCH64)
 #define MLAS_LSX_INTRINSICS
 #endif
+#if defined(MLAS_TARGET_RISCV64) && (__riscv_v_fixed_vlen == 128)
+#define MLAS_RVV_INTRINSICS
+#endif
 
 #if defined(MLAS_NEON_INTRINSICS)
 typedef float32x4_t MLAS_FLOAT32X4;
@@ -1483,6 +1489,9 @@ typedef v128_t MLAS_INT32X4;
 #elif defined(MLAS_LSX_INTRINSICS)
 typedef __m128 MLAS_FLOAT32X4;
 typedef __m128i MLAS_INT32X4;
+#elif defined(MLAS_RVV_INTRINSICS)
+typedef vfloat32m1_t MLAS_FLOAT32X4 __attribute__((riscv_rvv_vector_bits(128)));
+typedef vint32m1_t MLAS_INT32X4 __attribute__((riscv_rvv_vector_bits(128)));
 #else
 typedef float MLAS_FLOAT32X4 __attribute__ ((vector_size(16)));
 typedef int32_t MLAS_INT32X4 __attribute__ ((vector_size(16)));
@@ -1498,6 +1507,8 @@ MlasReinterpretAsInt32x4(MLAS_FLOAT32X4 Vector)
     return _mm_castps_si128(Vector);
 #elif defined(MLAS_LSX_INTRINSICS)
     return (MLAS_INT32X4)Vector;
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vreinterpret_v_f32m1_i32m1(Vector);
 #else
     return MLAS_INT32X4(Vector);
 #endif
@@ -1517,6 +1528,8 @@ MlasCastToInt32x4(MLAS_FLOAT32X4 Vector)
     return __lsx_vftint_w_s(Vector);
 #elif defined(MLAS_WASM_SIMD_INTRINSICS)
     return (MLAS_INT32X4)__builtin_convertvector((__f32x4)Vector, __i32x4);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfcvt_x_f_v_i32m1(Vector, 4);
 #else
     return MLAS_INT32X4{int32_t(Vector[0]), int32_t(Vector[1]), int32_t(Vector[2]), int32_t(Vector[3])};
 #endif
@@ -1536,6 +1549,8 @@ MlasCastToFloat32x4(MLAS_INT32X4 Vector)
     return wasm_f32x4_convert_i32x4(Vector);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vffint_s_w(Vector);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfcvt_f_x_v_f32m1(Vector, 4);
 #else
     return MLAS_FLOAT32X4{float(Vector[0]), float(Vector[1]), float(Vector[2]), float(Vector[3])};
 #endif
@@ -1555,6 +1570,8 @@ MlasBroadcastInt32x4(int32_t Value)
     return vec_splats(Value);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vreplgr2vr_w(Value);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vmv_v_x_i32m1(Value, 4);
 #else
     return MLAS_INT32X4{Value, Value, Value, Value};
 #endif
@@ -1612,6 +1629,8 @@ MlasAddInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return vec_add(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vadd_w(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vadd_vv_i32m1(Vector1, Vector2, 4);
 #else
     return Vector1 + Vector2;
 #endif
@@ -1629,6 +1648,8 @@ MlasSubtractInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return wasm_i32x4_sub(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vsub_w(Vector1, Vector2);
+#elif defined (MLAS_RVV_INTRINSICS)
+    return __riscv_vsub_vv_i32m1(Vector1, Vector2, 4);
 #else
     return Vector1 - Vector2;
 #endif
@@ -1646,6 +1667,8 @@ MlasAndInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return wasm_v128_and(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vand_v(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vand_vv_i32m1(Vector1, Vector2, 4);
 #else
     return Vector1 & Vector2;
 #endif
@@ -1663,6 +1686,8 @@ MlasOrInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return wasm_v128_or(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vor_v(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vor_vv_i32m1(Vector1, Vector2, 4);
 #else
     return Vector1 | Vector2;
 #endif
@@ -1680,6 +1705,8 @@ MlasAndNotInt32x4(MLAS_INT32X4 VectorNot, MLAS_INT32X4 Vector)
     return wasm_v128_andnot(Vector, VectorNot);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vandn_v(VectorNot, Vector);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vand_vv_i32m1(__riscv_vnot_v_i32m1(VectorNot, 4), Vector, 4);
 #else
     return (~VectorNot) & Vector;
 #endif
@@ -1699,6 +1726,8 @@ MlasXorInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return vec_xor(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vxor_v(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vxor_vv_i32m1(Vector1, Vector2, 4);
 #else
     return Vector1 ^ Vector2;
 #endif
@@ -1724,6 +1753,8 @@ MlasShiftLeftInt32x4(MLAS_INT32X4 Vector)
     return wasm_i32x4_shl(Vector, ShiftCount);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vslli_w(Vector, ShiftCount);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vsll_vx_i32m1(Vector, ShiftCount, 4);
 #else
     return Vector << ShiftCount;
 #endif
@@ -1745,6 +1776,8 @@ MlasMaximumInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return wasm_i32x4_max(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vmax_w(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vmax_vv_i32m1(Vector1, Vector2, 4);
 #else
     return MlasBlendInt32x4(Vector2, Vector1, Vector1 > Vector2);
 #endif
@@ -1766,6 +1799,8 @@ MlasMinimumInt32x4(MLAS_INT32X4 Vector1, MLAS_INT32X4 Vector2)
     return wasm_i32x4_min(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vmin_w(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vmin_vv_i32m1(Vector1, Vector2, 4);
 #else
     return MlasBlendInt32x4(Vector2, Vector1, Vector2 > Vector1);
 #endif
@@ -1781,6 +1816,8 @@ MlasReinterpretAsFloat32x4(MLAS_INT32X4 Vector)
     return _mm_castsi128_ps(Vector);
 #elif defined(MLAS_LSX_INTRINSICS)
     return MLAS_FLOAT32X4(Vector);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vreinterpret_v_i32m1_f32m1(Vector);
 #else
     return MLAS_FLOAT32X4(Vector);
 #endif
@@ -1802,6 +1839,8 @@ MlasBroadcastFloat32x4(float Value)
     return vec_splats(Value);
 #elif defined(MLAS_LSX_INTRINSICS)
     return MLAS_FLOAT32X4{Value, Value, Value, Value};
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmv_v_f_f32m1(Value, 4);
 #else
     return MLAS_FLOAT32X4{Value, Value, Value, Value};
 #endif
@@ -1821,6 +1860,8 @@ MlasBroadcastFloat32x4(const float* Value)
     return vec_splats(*Value);
 #elif defined(MLAS_LSX_INTRINSICS)
     return MLAS_FLOAT32X4{*Value, *Value, *Value, *Value};
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmv_v_f_f32m1(*Value, 4);
 #else
     return MLAS_FLOAT32X4{*Value, *Value, *Value, *Value};
 #endif
@@ -1919,6 +1960,9 @@ MlasStoreLaneFloat32x4(float* Buffer, MLAS_FLOAT32X4 Vector)
     *Buffer = ((__f32x4)(Vector))[Lane];
 #elif defined(MLAS_LSX_INTRINSICS)
     *Buffer = Vector[Lane];
+#elif defined(MLAS_RVV_INTRINSICS)
+    vuint32m1_t index = __riscv_vmv_s_x_u32m1(Lane, 1);
+    *Buffer = __riscv_vfmv_f_s_f32m1_f32(__riscv_vrgather_vv_f32m1(Vector, index, 1));
 #else
     *Buffer = Vector[Lane];
 #endif
@@ -1937,6 +1981,8 @@ MlasStoreLowHalfFloat32x4(float* Buffer, MLAS_FLOAT32X4 Vector)
 #elif defined(MLAS_LSX_INTRINSICS)
     MlasStoreLaneFloat32x4<0>(&Buffer[0], Vector);
     MlasStoreLaneFloat32x4<1>(&Buffer[1], Vector);
+#elif defined(MLAS_RVV_INTRINSICS)
+    __riscv_vse32_v_f32m1(Buffer, Vector, 2);
 #else
     MlasStoreLaneFloat32x4<0>(&Buffer[0], Vector);
     MlasStoreLaneFloat32x4<1>(&Buffer[1], Vector);
@@ -1956,6 +2002,8 @@ MlasExtractLaneFloat32x4(MLAS_FLOAT32X4 Vector)
     return wasm_f32x4_extract_lane(Vector, Lane);
 #elif defined(MLAS_LSX_INTRINSICS)
     return Vector[Lane];
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmv_f_s_f32m1_f32(__riscv_vrgather_vv_f32m1(Vector, __riscv_vmv_s_x_u32m1(Lane, 1), 1));
 #else
     return Vector[Lane];
 #endif
@@ -1989,7 +2037,7 @@ MlasShuffleFloat32x4(MLAS_FLOAT32X4 Vector)
 
 #endif
 
-#if !defined(MLAS_SSE2_INTRINSICS) && !defined(_MSC_VER)
+#if !defined(MLAS_SSE2_INTRINSICS) && !defined(_MSC_VER) && !defined(MLAS_RVV_INTRINSICS)
 
 template<unsigned Index0, unsigned Index1, unsigned Index2, unsigned Index3>
 MLAS_FORCEINLINE
@@ -2033,6 +2081,14 @@ MlasInterleaveLowFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return vec_mergeh(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return (MLAS_FLOAT32X4)__lsx_vilvl_w(MlasReinterpretAsInt32x4(Vector2), MlasReinterpretAsInt32x4(Vector1));
+#elif defined(MLAS_RVV_INTRINSICS)
+    const uint32_t index[4] = {0, 0, 1, 1};
+    const int32_t msk[4] = {0, 1, 0, 1};
+    vuint32m1_t vidx = __riscv_vle32_v_u32m1(index, 4);
+    vfloat32m1_t vret = __riscv_vrgather_vv_f32m1(Vector1, vidx, 3);
+    vint32m1_t vmsk = __riscv_vle32_v_i32m1(msk, 4);
+    vbool32_t bmsk = __riscv_vreinterpret_v_i32m1_b32(vmsk);
+    return __riscv_vrgather_vv_f32m1_mu(bmsk, vret, Vector2, vidx, 4);
 #else
     return MlasShuffleFloat32x4<0, 4, 1, 5>(Vector1, Vector2);
 #endif
@@ -2053,6 +2109,14 @@ MlasInterleaveHighFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return vec_mergel(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return (MLAS_FLOAT32X4)__lsx_vilvh_w(MlasReinterpretAsInt32x4(Vector2), MlasReinterpretAsInt32x4(Vector1));
+#elif defined(MLAS_RVV_INTRINSICS)
+    const uint32_t index[4] = {2, 2, 3, 3};
+    const int32_t msk[4] = {0, 1, 0, 1};
+    vuint32m1_t vidx = __riscv_vle32_v_u32m1(index, 4);
+    vfloat32m1_t vret = __riscv_vrgather_vv_f32m1(Vector1, vidx, 3);
+    vint32m1_t vmsk = __riscv_vle32_v_i32m1(msk, 4);
+    vbool32_t bmsk = __riscv_vreinterpret_v_i32m1_b32(vmsk);
+    return __riscv_vrgather_vv_f32m1_mu(bmsk, vret, Vector2, vidx, 4);
 #else
     return MlasShuffleFloat32x4<2, 6, 3, 7>(Vector1, Vector2);
 #endif
@@ -2072,6 +2136,8 @@ MlasAddFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return vec_add(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfadd_s(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfadd_vv_f32m1(Vector1, Vector2, 4);
 #else
     return Vector1 + Vector2;
 #endif
@@ -2091,6 +2157,8 @@ MlasSubtractFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return vec_sub(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfsub_s(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfsub_vv_f32m1(Vector1, Vector2, 4);
 #else
     return Vector1 - Vector2;
 #endif
@@ -2113,6 +2181,8 @@ MlasMultiplyFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return vec_mul(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfmul_s(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmul_vv_f32m1(Vector1, Vector2, 4);
 #else
     return Vector1 * Vector2;
 #endif
@@ -2134,6 +2204,8 @@ MlasMultiplyAddFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2, MLAS_FL
     return wasm_f32x4_add(wasm_f32x4_mul(Vector1, Vector2), Vector3);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfmadd_s(Vector1, Vector2, Vector3);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmadd_vv_f32m1(Vector3, Vector1, Vector2, 4);
 #else
     return Vector1 * Vector2 + Vector3;
 #endif
@@ -2171,6 +2243,8 @@ MlasDivideFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return wasm_f32x4_div(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfdiv_s(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfdiv_vv_f32m1(Vector1, Vector2, 4);
 #else
     return Vector1 / Vector2;
 #endif
@@ -2190,6 +2264,10 @@ MlasGreaterThanFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return MLAS_FLOAT32X4(vec_cmpgt(Vector1, Vector2));
 #elif defined(MLAS_LSX_INTRINSICS)
     return (MLAS_FLOAT32X4)__lsx_vfcmp_clt_s(Vector2, Vector1);
+#elif defined(MLAS_RVV_INTRINSICS)
+    vbool32_t bmsk = __riscv_vmfge_vv_f32m1_b32(Vector1, Vector2, 4);
+    vint32m1_t vmsk = __riscv_vreinterpret_v_b32_i32m1(bmsk);
+    return __riscv_vreinterpret_v_i32m1_f32m1(vmsk);
 #else
     return Vector1 > Vector2;
 #endif
@@ -2279,6 +2357,8 @@ MlasMaximumFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return wasm_f32x4_max(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfmax_s(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmax_vv_f32m1(Vector1, Vector2, 4);
 #else
     return MlasBlendFloat32x4(Vector2, Vector1, Vector1 > Vector2);
 #endif
@@ -2301,6 +2381,8 @@ MlasMinimumFloat32x4(MLAS_FLOAT32X4 Vector1, MLAS_FLOAT32X4 Vector2)
     return wasm_f32x4_min(Vector1, Vector2);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfmin_s(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmin_vv_f32m1(Vector1, Vector2, 4);
 #else
     return MlasBlendFloat32x4(Vector2, Vector1, Vector2 > Vector1);
 #endif
@@ -2337,6 +2419,10 @@ MlasReduceAddFloat32x4(MLAS_FLOAT32X4 Vector)
     Vector = MlasAddFloat32x4(Vector, MLAS_FLOAT32X4(vec_splat((__vector long long)Vector, 1)));
     Vector = MlasAddFloat32x4(Vector, vec_splat(Vector, 1));
     return Vector[0];
+#elif defined(MLAS_RVV_INTRINSICS)
+    vfloat32m1_t vsum = __riscv_vfmv_s_f_f32m1(0.0f, 1);
+    vsum = __riscv_vfredosum_vs_f32m1_f32m1(Vector, vsum, 4);
+    return __riscv_vfmv_f_s_f32m1_f32(vsum);
 #else
     Vector = MlasAddFloat32x4(Vector, MlasShuffleFloat32x4<2, 3, 2, 3>(Vector));
     Vector = MlasAddFloat32x4(Vector, MlasShuffleFloat32x4<1, 1, 1, 1>(Vector));
@@ -2360,6 +2446,10 @@ MlasReduceMaximumFloat32x4(MLAS_FLOAT32X4 Vector)
     Vector = MlasMaximumFloat32x4(Vector, MLAS_FLOAT32X4(vec_splat((__vector long long)Vector, 1)));
     Vector = MlasMaximumFloat32x4(Vector, vec_splat(Vector, 1));
     return Vector[0];
+#elif defined(MLAS_RVV_INTRINSICS)
+    vfloat32m1_t vsum = __riscv_vfmv_s_f_f32m1(FLT_MIN, 1);
+    vsum = __riscv_vfredmax_vs_f32m1_f32m1(Vector, vsum, 4);
+    return __riscv_vfmv_f_s_f32m1_f32(vsum);
 #else
     Vector = MlasMaximumFloat32x4(Vector, MlasShuffleFloat32x4<2, 3, 2, 3>(Vector));
     Vector = MlasMaximumFloat32x4(Vector, MlasShuffleFloat32x4<1, 1, 1, 1>(Vector));
@@ -2383,6 +2473,10 @@ MlasReduceMinimumFloat32x4(MLAS_FLOAT32X4 Vector)
     Vector = MlasMinimumFloat32x4(Vector, MLAS_FLOAT32X4(vec_splat((__vector long long)Vector, 1)));
     Vector = MlasMinimumFloat32x4(Vector, vec_splat(Vector, 1));
     return Vector[0];
+#elif defined(MLAS_RVV_INTRINSICS)
+    vfloat32m1_t vsum = __riscv_vfmv_s_f_f32m1(FLT_MAX, 1);
+    vsum = __riscv_vfredmin_vs_f32m1_f32m1(Vector, vsum, 4);
+    return __riscv_vfmv_f_s_f32m1_f32(vsum);
 #else
     Vector = MlasMinimumFloat32x4(Vector, MlasShuffleFloat32x4<2, 3, 2, 3>(Vector));
     Vector = MlasMinimumFloat32x4(Vector, MlasShuffleFloat32x4<1, 1, 1, 1>(Vector));
