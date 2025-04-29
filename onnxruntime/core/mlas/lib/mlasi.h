@@ -1591,6 +1591,8 @@ MlasLoadInt32x4(const int32_t* Buffer)
     return wasm_v128_load(Buffer);
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vld((const MLAS_INT32X4*)Buffer, 0);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vle32_v_i32m1(Buffer, 4);
 #else
     return *((MLAS_INT32X4*)Buffer);
 #endif
@@ -1610,6 +1612,8 @@ MlasStoreInt32x4(int32_t* Buffer, MLAS_INT32X4 Vector)
     wasm_v128_store(Buffer, Vector);
 #elif defined(MLAS_LSX_INTRINSICS)
     __lsx_vst(Vector, (MLAS_INT32X4 *)Buffer, 0);
+#elif defined(MLAS_RVV_INTRINSICS)
+    __riscv_vse32_v_i32m1(Buffer, Vector, 4);
 #else
     *((MLAS_INT32X4*)Buffer) = Vector;
 #endif
@@ -1899,6 +1903,8 @@ MlasLoadFloat32x4(const float* Buffer)
 #elif defined(MLAS_LSX_INTRINSICS)
     // return MlasReinterpretAsFloat32x4(__lsx_vld((const MLAS_INT32X4 *)Buffer, 0));
     return (MLAS_FLOAT32X4)__lsx_vld((const MLAS_INT32X4 *)Buffer, 0);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vle32_v_f32m1(Buffer, 4);
 #else
     return *((MLAS_FLOAT32X4*)Buffer);
 #endif
@@ -1918,6 +1924,8 @@ MlasStoreFloat32x4(float* Buffer, MLAS_FLOAT32X4 Vector)
     wasm_v128_store(Buffer, Vector);
 #elif defined(MLAS_LSX_INTRINSICS)
     __lsx_vst(MlasReinterpretAsInt32x4(Vector), Buffer, 0);
+#elif defined(MLAS_RVV_INTRINSICS)
+    __riscv_vse32_v_f32m1(Buffer, Vector, 4);
 #else
     *((MLAS_FLOAT32X4*)Buffer) = Vector;
 #endif
@@ -2503,6 +2511,8 @@ typedef __m128d MLAS_FLOAT64X2;
 typedef __vector double MLAS_FLOAT64X2;
 #elif defined(MLAS_LSX_INTRINSICS)
 typedef __m128d MLAS_FLOAT64X2;
+#elif defined(MLAS_RVV_INTRINSICS)
+typedef vfloat64m1_t MLAS_FLOAT64X2;
 #else
 #define MLAS_FLOAT64X2_UNSUPPORTED
 #endif
@@ -2551,6 +2561,27 @@ MlasBroadcastFloat64x2(const double *Value)
 {
     return MLAS_FLOAT64X2{*Value, *Value};
 }
+#elif defined(MLAS_RVV_INTRINSICS)
+template<unsigned Lane>
+MLAS_FORCEINLINE
+double
+MlasExtractLaneFloat64x2(MLAS_FLOAT64X2 Vector)
+{
+    return __riscv_vfmv_f_s_f64m1_f64(__riscv_vrgather_vv_f64m1(Vector, __riscv_vmv_s_x_u64m1(Lane, 1), 1));
+}
+MLAS_FORCEINLINE
+MLAS_FLOAT64X2
+MlasMultiplyAddFloat64x2(MLAS_FLOAT64X2 Vector1, MLAS_FLOAT64X2 Vector2, MLAS_FLOAT64X2 Vector3)
+{
+    return __riscv_vfmacc_vv_f64m1(Vector3, Vector1, Vector2, 2);
+}
+
+MLAS_FORCEINLINE
+MLAS_FLOAT64X2
+MlasBroadcastFloat64x2(const double *Value)
+{
+    return __riscv_vfmv_v_f_f64m1(*Value, 2);
+}
 #endif
 MLAS_FORCEINLINE
 MLAS_FLOAT64X2
@@ -2562,6 +2593,8 @@ MlasBroadcastFloat64x2(double Value)
     return MLAS_FLOAT64X2{Value, Value};
 #elif defined(MLAS_LSX_INTRINSICS)
     return MLAS_FLOAT64X2{Value, Value};
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmv_v_f_f64m1(Value, 2);
 #endif
 }
 
@@ -2575,6 +2608,8 @@ MlasZeroFloat64x2(void)
     return MlasBroadcastFloat64x2(0.0f);
 #elif defined(MLAS_LSX_INTRINSICS)
     return MlasBroadcastFloat64x2(0.0f);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmv_v_f_f64m1(0.0f, 2);
 #endif
 }
 
@@ -2588,6 +2623,8 @@ MlasLoadFloat64x2(const double* Buffer)
     return vec_vsx_ld(0, Buffer);
 #elif defined(MLAS_LSX_INTRINSICS)
     return MLAS_FLOAT64X2(__lsx_vld((const MLAS_INT32X4 *)Buffer, 0));
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vle64_v_f64m1(Buffer, 2);
 #endif
 }
 
@@ -2601,6 +2638,8 @@ MlasStoreFloat64x2(double* Buffer, MLAS_FLOAT64X2 Vector)
     vec_vsx_st(Vector, 0, Buffer);
 #elif defined(MLAS_LSX_INTRINSICS)
     (__lsx_vst(MLAS_INT32X4(Vector), Buffer, 0));
+#elif defined(MLAS_RVV_INTRINSICS)
+    __riscv_vse64_v_f64m1(Buffer, Vector, 2);
 #endif
 }
 
@@ -2614,6 +2653,8 @@ MlasStoreAlignedFloat64x2(double* Buffer, MLAS_FLOAT64X2 Vector)
     *((MLAS_FLOAT64X2*)Buffer) = Vector;
 #elif defined(MLAS_LSX_INTRINSICS)
     (__lsx_vst(MLAS_INT32X4(Vector), Buffer, 0));
+#elif defined(MLAS_RVV_INTRINSICS)
+    __riscv_vse64_v_f64m1(Buffer, Vector, 2);
 #endif
 }
 
@@ -2627,6 +2668,8 @@ MlasMultiplyFloat64x2(MLAS_FLOAT64X2 Vector1, MLAS_FLOAT64X2 Vector2)
     return Vector1 * Vector2;
 #elif defined(MLAS_LSX_INTRINSICS)
     return __lsx_vfmul_d(Vector1, Vector2);
+#elif defined(MLAS_RVV_INTRINSICS)
+    return __riscv_vfmul_vv_f64m1(Vector1, Vector2, 2);
 #endif
 }
 
